@@ -1,11 +1,13 @@
 ﻿using Stable_Bloom_Filter.Hash;
+using System.Collections;
 public class StableBloom
 {
     private Random random;
+
     /// <summary>
     /// Die slots für den Bloom Filter
     /// </summary>
-    private int[] table;
+    private BitArray[] table;
 
     /// <summary>
     /// Anzahl der zu verwendenden Hashes
@@ -49,7 +51,11 @@ public class StableBloom
     public StableBloom(int size, int numHashFunctions, int maxCounterValue = 5, double decayFactor = 0.25)
     {
         if (size < 10) size = 10;
-        table = new int[size];
+
+        table = new BitArray[size];
+        for (int i = 0; i < size; i++)
+            table[i] = new BitArray(maxCounterValue);
+
         this.numHashFunctions = numHashFunctions;
         random = new Random();
         this.maxCounterValue = maxCounterValue;
@@ -69,7 +75,7 @@ public class StableBloom
         for (int i = 0; i < numHashFunctions; i++)
         {
             int index = CreateHash(item, i);
-            table[index] = Math.Min(maxCounterValue, table[index] + 1);  // Zähler erhöhen
+            table[index].Set(Math.Min(maxCounterValue, table[index].Cast<bool>().Count(x => x)), true);  // Zähler erhöhen
         }
         curInsertions++; // Eintragungs Zyklus zählen
 
@@ -91,7 +97,7 @@ public class StableBloom
         for (int i = 0; i < numHashFunctions; i++)
         {
             int index = CreateHash(item, i);
-            if (table[index] == 0) // sobald einer der selektierten slots 0 ist, ist das Element nicht vorhanden
+            if (!table[index].HasAnySet()) // sobald einer der selektierten slots 0 ist, ist das Element nicht vorhanden
                 return false;
         }
         return true; // Alle Hash-Positionen haben nicht-null Zähler, Element könnte also vorhanden sein
@@ -109,10 +115,10 @@ public class StableBloom
 
             // Abfragen ob der derzeitige slot größer null ist und einen zufallsfaktor generieren.
             // ist der kleiner als der Verfall-Faktor wird der slot um 1 reduziert
-            if (table[i] > 0 &&
+            if (table[i].HasAnySet() &&
                 random.NextDouble() < decayFactor)
             {
-                table[i]--;
+                table[i].RightShift(1);
                 kslots++;
             }
         }
@@ -143,7 +149,7 @@ public class StableBloom
         int nonZeroCounters = 0;
         foreach (var count in table)
         {
-            if (count > 0)
+            if (count.HasAnySet())
                 nonZeroCounters++;
         }
         return (double)(nonZeroCounters / table.Length);
